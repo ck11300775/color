@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>紅綠燈倒數數字辨識系統</title>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            background-color: #121212;
+            color: #ffffff;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            max-width: 500px;
+            width: 100%;
+            background: #1e1e1e;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            text-align: center;
+        }
+        h1 { font-size: 24px; color: #00e676; margin-bottom: 20px; }
+        .btn-group { margin: 15px 0; }
+        input[type="file"] { display: none; }
+        .btn {
+            background-color: #2979ff;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            display: inline-block;
+            margin: 5px;
+            border: none;
+            transition: 0.3s;
+        }
+        .btn:hover { background-color: #2962ff; }
+        #preview {
+            max-width: 100%;
+            max-height: 300px;
+            margin-top: 15px;
+            border-radius: 8px;
+            display: none;
+        }
+        #result-box {
+            margin-top: 25px;
+            padding: 15px;
+            background: #2d2d2d;
+            border-radius: 8px;
+            border-left: 5px solid #00e676;
+        }
+        .status { color: #aaa; font-style: italic; }
+        .number-output {
+            font-size: 48px;
+            font-weight: bold;
+            color: #ff1744;
+            margin-top: 10px;
+            font-family: 'Courier New', Courier, monospace;
+        }
+    </style>
+    <!-- 引入 Tesseract.js 用於純前端數字 OCR 辨識 -->
+    <script src="https://jsdelivr.net"></script>
+</head>
+<body>
+
+<div class="container">
+    <h1>交通紅綠燈數字辨識</h1>
+    <p>請上傳包含紅綠燈倒數秒數的圖片進行辨識</p>
+    
+    <div class="btn-group">
+        <label for="imageLoader" class="btn">選擇圖片</label>
+        <input type="file" id="imageLoader" accept="image/*">
+    </div>
+
+    <img id="preview" alt="圖片預覽">
+
+    <div id="result-box">
+        <div>辨識狀態：<span id="status" class="status">等待上傳圖片...</span></div>
+        <div style="margin-top: 10px;">辨識出的秒數：</div>
+        <div id="output" class="number-output">--</div>
+    </div>
+</div>
+
+<script>
+    const imageLoader = document.getElementById('imageLoader');
+    const preview = document.getElementById('preview');
+    const statusText = document.getElementById('status');
+    const outputText = document.getElementById('output');
+
+    imageLoader.addEventListener('change', handleImage, false);
+
+    function handleImage(e) {
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            preview.src = event.target.result;
+            preview.style.display = 'inline-block';
+            
+            // 開始進行 OCR 數字辨識
+            recognizeTrafficNumber(event.target.result);
+        }
+        if(e.target.files[0]) {
+            reader.readAsDataURL(e.target.files[0]);
+        }
+    }
+
+    function recognizeTrafficNumber(imageSrc) {
+        statusText.innerText = '正在處理並辨識數字中...';
+        outputText.innerText = '--';
+
+        // 呼叫 Tesseract 核心，設定只識別數字 (0-9)
+        Tesseract.recognize(
+            imageSrc,
+            'eng', // 紅綠燈數字通常為阿拉伯數字，用英文模型即可
+            {
+                logger: m => {
+                    if(m.status === 'recognizing text') {
+                        statusText.innerText = `辨識中: ${Math.round(m.progress * 100)}%`;
+                    }
+                }
+            }
+        ).then(({ data: { text } }) => {
+            // 過濾掉非數字的雜訊字元
+            const cleanedText = text.replace(/[^0-9]/g, '');
+            
+            if (cleanedText.trim() === "") {
+                statusText.innerText = '辨識完成，但未偵測到明顯數字。';
+                outputText.innerText = 'X';
+                outputText.style.color = '#ff1744';
+            } else {
+                statusText.innerText = '辨識成功！';
+                outputText.innerText = cleanedText;
+                outputText.style.color = '#00e676'; // 成功時變綠色
+            }
+        }).catch(err => {
+            console.error(err);
+            statusText.innerText = '辨識過程發生錯誤。';
+            outputText.innerText = 'Err';
+        });
+    }
+</script>
+
+</body>
+</html>
