@@ -1,1 +1,1 @@
-# traffic-light-ocr
+# light
