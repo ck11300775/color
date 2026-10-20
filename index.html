@@ -3,146 +3,252 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>紅綠燈倒數數字辨識系統</title>
+    <title>即時相機色彩明度/彩度分析儀</title>
     <style>
+        :root {
+            --bg-color: #f0f2f5;
+            --text-color: #333333;
+            --panel-bg: rgba(255, 255, 255, 0.9);
+            --shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        /* 當判定為深色模式時，網頁背景與文字顏色同步切換 */
+        body.dark-mode {
+            --bg-color: #121212;
+            --text-color: #ffffff;
+            --panel-bg: rgba(30, 30, 30, 0.9);
+            --shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        }
+
         body {
-            font-family: 'Helvetica Neue', Arial, sans-serif;
-            background-color: #121212;
-            color: #ffffff;
             margin: 0;
             padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
             display: flex;
             flex-direction: column;
             align-items: center;
+            transition: background-color 0.4s ease, color 0.4s ease;
         }
-        .container {
-            max-width: 500px;
-            width: 100%;
-            background: #1e1e1e;
-            padding: 20px;
-            border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+
+        h1 {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
             text-align: center;
         }
-        h1 { font-size: 24px; color: #00e676; margin-bottom: 20px; }
-        .btn-group { margin: 15px 0; }
-        input[type="file"] { display: none; }
-        .btn {
-            background-color: #2979ff;
-            color: white;
-            padding: 10px 20px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 16px;
-            display: inline-block;
-            margin: 5px;
-            border: none;
-            transition: 0.3s;
+
+        .container {
+            position: relative;
+            width: 100%;
+            max-width: 500px;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: var(--shadow);
+            background: #000;
+            aspect-ratio: 4 / 3;
         }
-        .btn:hover { background-color: #2962ff; }
-        #preview {
-            max-width: 100%;
-            max-height: 300px;
-            margin-top: 15px;
-            border-radius: 8px;
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* 隱藏用來抓取像素的 Canvas */
+        canvas {
             display: none;
         }
-        #result-box {
-            margin-top: 25px;
-            padding: 15px;
-            background: #2d2d2d;
-            border-radius: 8px;
-            border-left: 5px solid #00e676;
+
+        .dashboard {
+            width: 100%;
+            max-width: 460px;
+            margin-top: 20px;
+            padding: 20px;
+            background-color: var(--panel-bg);
+            border-radius: 16px;
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(10px);
+            transition: background-color 0.4s ease;
         }
-        .status { color: #aaa; font-style: italic; }
-        .number-output {
-            font-size: 48px;
+
+        .status-badge {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 20px;
             font-weight: bold;
-            color: #ff1744;
-            margin-top: 10px;
-            font-family: 'Courier New', Courier, monospace;
+            font-size: 1.1rem;
+            margin-bottom: 15px;
+            text-align: center;
+            width: calc(100% - 32px);
+        }
+
+        /* 狀態標籤顏色 */
+        .badge-light { background-color: #e3f2fd; color: #0d47a1; }
+        .badge-dark { background-color: #212121; color: #ffeb3b; border: 1px solid #ffeb3b; }
+        .badge-gray { background-color: #eceff1; color: #37474f; }
+
+        .data-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 8px 0;
+            font-size: 1rem;
+        }
+
+        .data-value {
+            font-family: monospace;
+            font-weight: bold;
+        }
+
+        .error-msg {
+            color: #d32f2f;
+            background: #ffebee;
+            padding: 15px;
+            border-radius: 8px;
+            display: none;
+            text-align: center;
+            max-width: 400px;
+            margin-top: 20px;
         }
     </style>
-    <!-- 引入 Tesseract.js 用於純前端數字 OCR 辨識 -->
-    <script src="https://jsdelivr.net"></script>
 </head>
 <body>
 
-<div class="container">
-    <h1>交通紅綠燈數字辨識</h1>
-    <p>請上傳包含紅綠燈倒數秒數的圖片進行辨識</p>
-    
-    <div class="btn-group">
-        <label for="imageLoader" class="btn">選擇圖片</label>
-        <input type="file" id="imageLoader" accept="image/*">
+    <h1>相機即時明度與彩度檢測</h1>
+
+    <div class="container">
+        <!-- 顯示相機串流 -->
+        <video id="webcam" autoplay playsinline muted></video>
     </div>
 
-    <img id="preview" alt="圖片預覽">
+    <!-- 用於背景處理影像數據的 Canvas -->
+    <canvas id="analyzerCanvas"></canvas>
 
-    <div id="result-box">
-        <div>辨識狀態：<span id="status" class="status">等待上傳圖片...</span></div>
-        <div style="margin-top: 10px;">辨識出的秒數：</div>
-        <div id="output" class="number-output">--</div>
+    <div class="dashboard">
+        <div id="statusBadge" class="status-badge badge-light">初始化中...</div>
+        
+        <div class="data-row">
+            <span>環境亮度 (Lightness):</span>
+            <span id="valLightness" class="data-value">0%</span>
+        </div>
+        <div class="data-row">
+            <span>色彩飽和 (Saturation):</span>
+            <span id="valSaturation" class="data-value">0%</span>
+        </div>
     </div>
-</div>
 
-<script>
-    const imageLoader = document.getElementById('imageLoader');
-    const preview = document.getElementById('preview');
-    const statusText = document.getElementById('status');
-    const outputText = document.getElementById('output');
+    <div id="errorArea" class="error-msg"></div>
 
-    imageLoader.addEventListener('change', handleImage, false);
+    <script>
+        const video = document.getElementById('webcam');
+        const canvas = document.getElementById('analyzerCanvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        
+        const statusBadge = document.getElementById('statusBadge');
+        const valLightness = document.getElementById('valLightness');
+        const valSaturation = document.getElementById('valSaturation');
+        const errorArea = document.getElementById('errorArea');
 
-    function handleImage(e) {
-        const reader = new FileReader();
-        reader.onload = function(event) {
-            preview.src = event.target.result;
-            preview.style.display = 'inline-block';
-            
-            // 開始進行 OCR 數字辨識
-            recognizeTrafficNumber(event.target.result);
+        // 1. 啟動相機
+        async function initCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+                    audio: false
+                });
+                video.srcObject = stream;
+                video.addEventListener('loadedmetadata', () => {
+                    // 設定 Canvas 的取樣解析度（無須太高，160x120 即可確保流暢度與準確性）
+                    canvas.width = 160;
+                    canvas.height = 120;
+                    tick();
+                });
+            } catch (err) {
+                console.error("無法存取相機: ", err);
+                errorArea.textContent = "無法啟動相機。請確認已允許瀏覽器使用相機權限，且網站使用的是 HTTPS 安全連線。";
+                errorArea.style.display = "block";
+                statusBadge.textContent = "錯誤";
+            }
         }
-        if(e.target.files[0]) {
-            reader.readAsDataURL(e.target.files[0]);
-        }
-    }
 
-    function recognizeTrafficNumber(imageSrc) {
-        statusText.innerText = '正在處理並辨識數字中...';
-        outputText.innerText = '--';
+        // 2. 每幀循環分析處理
+        function tick() {
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                // 將 Video 當前畫面繪製到縮小版的 Canvas 上
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                
+                // 取得所有像素的 RGBA 數據
+                const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const data = imgData.data;
+                
+                let totalTotalLightness = 0;
+                let totalSaturation = 0;
+                let pixelCount = 0;
 
-        // 呼叫 Tesseract 核心，設定只識別數字 (0-9)
-        Tesseract.recognize(
-            imageSrc,
-            'eng', // 紅綠燈數字通常為阿拉伯數字，用英文模型即可
-            {
-                logger: m => {
-                    if(m.status === 'recognizing text') {
-                        statusText.innerText = `辨識中: ${Math.round(m.progress * 100)}%`;
+                // 逐像素讀取 RGB (步進 4 代表跳過 R, G, B, A 中的 A)
+                for (let i = 0; i < data.length; i += 4) {
+                    const r = data[i] / 255;
+                    const g = data[i+1] / 255;
+                    const b = data[i+2] / 255;
+
+                    const max = Math.max(r, g, b);
+                    const min = Math.min(r, g, b);
+                    
+                    // 計算明度 (Lightness)
+                    let l = (max + min) / 2;
+                    
+                    // 計算彩度 (Saturation)
+                    let s = 0;
+                    if (max !== min) {
+                        s = l > 0.5 ? (max - min) / (2 - max - min) : (max - min) / (max + min);
                     }
-                }
-            }
-        ).then(({ data: { text } }) => {
-            // 過濾掉非數字的雜訊字元
-            const cleanedText = text.replace(/[^0-9]/g, '');
-            
-            if (cleanedText.trim() === "") {
-                statusText.innerText = '辨識完成，但未偵測到明顯數字。';
-                outputText.innerText = 'X';
-                outputText.style.color = '#ff1744';
-            } else {
-                statusText.innerText = '辨識成功！';
-                outputText.innerText = cleanedText;
-                outputText.style.color = '#00e676'; // 成功時變綠色
-            }
-        }).catch(err => {
-            console.error(err);
-            statusText.innerText = '辨識過程發生錯誤。';
-            outputText.innerText = 'Err';
-        });
-    }
-</script>
 
+                    totalTotalLightness += l;
+                    totalSaturation += s;
+                    pixelCount++;
+                }
+
+                // 計算全畫面平均百分比值
+                const avgL = Math.round((totalTotalLightness / pixelCount) * 100);
+                const avgS = Math.round((totalSaturation / pixelCount) * 100);
+
+                // 更新數據面板
+                valLightness.textContent = `${avgL}%`;
+                valSaturation.textContent = `${avgS}%`;
+
+                // 3. 根據明度與彩度做出視覺狀態判定
+                updateUIStatus(avgL, avgS);
+            }
+            
+            // 請求下一幀動畫，維持即時更新
+            requestAnimationFrame(tick);
+        }
+
+        // 4. 更新 UI 樣式與標籤
+        function updateUIStatus(lightness, saturation) {
+            // 清除現有狀態
+            statusBadge.className = "status-badge";
+            
+            if (saturation <= 12) {
+                // 彩度極低判定為灰階/無色彩
+                statusBadge.textContent = "灰階模式 (低彩度)";
+                statusBadge.classList.add("badge-gray");
+                document.body.classList.remove("dark-mode");
+            } else if (lightness >= 50) {
+                // 明度高於 50% 判定為淺色
+                statusBadge.textContent = "淺色模式 (Light)";
+                statusBadge.classList.add("badge-light");
+                document.body.classList.remove("dark-mode");
+            } else {
+                // 明度低於 50% 判定為深色
+                statusBadge.textContent = "深色模式 (Dark)";
+                statusBadge.classList.add("badge-dark");
+                document.body.classList.add("dark-mode");
+            }
+        }
+
+        // 初始化啟動
+        window.addEventListener('DOMContentLoaded', initCamera);
+    </script>
 </body>
 </html>
