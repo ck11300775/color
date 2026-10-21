@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>即時相機色彩明度/彩度分析儀</title>
+    <title>深淺檢測器</title>
     <style>
         :root {
             --bg-color: #f0f2f5;
@@ -231,17 +231,17 @@
             
             if (saturation <= 12) {
                 // 彩度極低判定為灰階/無色彩
-                statusBadge.textContent = "灰階模式 (低彩度)";
+                statusBadge.textContent = "平民 (中間值)";
                 statusBadge.classList.add("badge-gray");
                 document.body.classList.remove("dark-mode");
             } else if (lightness >= 50) {
                 // 明度高於 50% 判定為淺色
-                statusBadge.textContent = "淺色模式 (Light)";
+                statusBadge.textContent = "主人 (Light)";
                 statusBadge.classList.add("badge-light");
                 document.body.classList.remove("dark-mode");
             } else {
                 // 明度低於 50% 判定為深色
-                statusBadge.textContent = "深色模式 (Dark)";
+                statusBadge.textContent = "內閣 (Dark)";
                 statusBadge.classList.add("badge-dark");
                 document.body.classList.add("dark-mode");
             }
